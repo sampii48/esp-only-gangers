@@ -1,0 +1,246 @@
+-- SETTINGS
+_G.FriendColor = Color3.fromRGB(0, 0, 255)
+_G.EnemyColor = Color3.fromRGB(255, 0, 0)
+_G.UseTeamColor = true
+
+local toggleESP = true
+local toggleNameTags = true
+
+-- UI SETUP
+local screenGui = Instance.new("ScreenGui", game.CoreGui)
+screenGui.Name = "ESPToggleUI"
+
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 130, 0, 90)
+mainFrame.Position = UDim2.new(0, 10, 0, 10)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+
+local uiCorner = Instance.new("UICorner", mainFrame)
+uiCorner.CornerRadius = UDim.new(0, 6)
+
+local toggleESPButton = Instance.new("TextButton", mainFrame)
+toggleESPButton.Size = UDim2.new(1, -10, 0, 30)
+toggleESPButton.Position = UDim2.new(0, 5, 0, 5)
+toggleESPButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleESPButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleESPButton.Font = Enum.Font.SourceSansBold
+toggleESPButton.TextSize = 16
+toggleESPButton.Text = "ESP: ON"
+toggleESPButton.AutoButtonColor = false
+
+local toggleNameButton = Instance.new("TextButton", mainFrame)
+toggleNameButton.Size = UDim2.new(1, -10, 0, 30)
+toggleNameButton.Position = UDim2.new(0, 5, 0, 45)
+toggleNameButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleNameButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleNameButton.Font = Enum.Font.SourceSansBold
+toggleNameButton.TextSize = 16
+toggleNameButton.Text = "NameTags: ON"
+toggleNameButton.AutoButtonColor = false
+
+-- ESP HOLDER
+local Holder = Instance.new("Folder", game.CoreGui)
+Holder.Name = "ESP"
+
+-- TEMPLATES
+local Box = Instance.new("BoxHandleAdornment")
+Box.Name = "nilBox"
+Box.Size = Vector3.new(1, 2, 1)
+Box.Color3 = Color3.new(100 / 255, 100 / 255, 100 / 255)
+Box.Transparency = 0.7
+Box.ZIndex = 0
+Box.AlwaysOnTop = false
+Box.Visible = false
+
+local NameTag = Instance.new("BillboardGui")
+NameTag.Name = "nilNameTag"
+NameTag.Enabled = false
+NameTag.Size = UDim2.new(0, 200, 0, 50)
+NameTag.AlwaysOnTop = true
+NameTag.StudsOffset = Vector3.new(0, 1.8, 0)
+
+local Tag = Instance.new("TextLabel", NameTag)
+Tag.Name = "Tag"
+Tag.BackgroundTransparency = 1
+Tag.Position = UDim2.new(0, -50, 0, 0)
+Tag.Size = UDim2.new(0, 300, 0, 20)
+Tag.TextSize = 15
+Tag.TextColor3 = Color3.new(100 / 255, 100 / 255, 100 / 255)
+Tag.TextStrokeColor3 = Color3.new(0, 0, 0)
+Tag.TextStrokeTransparency = 0.4
+Tag.Text = "nil"
+Tag.Font = Enum.Font.SourceSansBold
+Tag.TextScaled = false
+
+-- ESP FUNCTIONS
+local function LoadCharacter(v)
+	repeat task.wait() until v.Character ~= nil
+	v.Character:WaitForChild("Humanoid")
+	local vHolder = Holder:FindFirstChild(v.Name)
+	if not vHolder then return end
+	vHolder:ClearAllChildren()
+
+	local b = Box:Clone()
+	b.Name = v.Name .. "Box"
+	b.Adornee = v.Character
+	b.Visible = toggleESP
+	b.Parent = vHolder
+
+	local t = NameTag:Clone()
+	t.Name = v.Name .. "NameTag"
+	t.Enabled = toggleESP and toggleNameTags
+	t.Parent = vHolder
+	t.Adornee = v.Character:FindFirstChild("Head")
+	if not t.Adornee then return end
+	t.Tag.Text = v.Name
+
+	local teamColor = Color3.new(v.TeamColor.r, v.TeamColor.g, v.TeamColor.b)
+	b.Color3 = teamColor
+	t.Tag.TextColor3 = teamColor
+
+	local Update
+	local function UpdateNameTag()
+		pcall(function()
+			v.Character.Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+			b.Visible = toggleESP
+			t.Enabled = toggleESP and toggleNameTags
+		end)
+	end
+
+	UpdateNameTag()
+	Update = v.Character.Humanoid.Changed:Connect(UpdateNameTag)
+end
+
+local function UnloadCharacter(v)
+	local vHolder = Holder:FindFirstChild(v.Name)
+	if vHolder then
+		vHolder:ClearAllChildren()
+	end
+end
+
+local function LoadPlayer(v)
+	local vHolder = Instance.new("Folder", Holder)
+	vHolder.Name = v.Name
+
+	v.CharacterAdded:Connect(function()
+		pcall(LoadCharacter, v)
+	end)
+
+	v.CharacterRemoving:Connect(function()
+		pcall(UnloadCharacter, v)
+	end)
+
+	v.Changed:Connect(function(prop)
+		if prop == "TeamColor" then
+			UnloadCharacter(v)
+			task.wait()
+			LoadCharacter(v)
+		end
+	end)
+
+	LoadCharacter(v)
+end
+
+local function UnloadPlayer(v)
+	UnloadCharacter(v)
+	local vHolder = Holder:FindFirstChild(v.Name)
+	if vHolder then vHolder:Destroy() end
+end
+
+-- RUN FOR EXISTING PLAYERS
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+for _, v in pairs(Players:GetPlayers()) do
+	if v ~= LocalPlayer then
+		task.spawn(function() pcall(LoadPlayer, v) end)
+	end
+end
+
+Players.PlayerAdded:Connect(function(v)
+	if v ~= LocalPlayer then
+		pcall(LoadPlayer, v)
+	end
+end)
+
+Players.PlayerRemoving:Connect(function(v)
+	if v ~= LocalPlayer then
+		pcall(UnloadPlayer, v)
+	end
+end)
+
+LocalPlayer.NameDisplayDistance = 0
+
+-- CHAMS FUNCTION
+function esp(target, color)
+	if target.Character then
+		local char = target.Character
+		if not char:FindFirstChild("GetReal") then
+			local highlight = Instance.new("Highlight")
+			highlight.Name = "GetReal"
+			highlight.RobloxLocked = true
+			highlight.Adornee = char
+			highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+			highlight.FillColor = color
+			highlight.Enabled = toggleESP
+			highlight.Parent = char
+		else
+			char.GetReal.FillColor = color
+			char.GetReal.Enabled = toggleESP
+		end
+	end
+end
+
+-- CHAMS LOOP
+task.spawn(function()
+	while task.wait(0.5) do
+		for _, v in pairs(Players:GetPlayers()) do
+			if v ~= LocalPlayer then
+				local color = _G.UseTeamColor and v.TeamColor.Color or ((v.TeamColor == LocalPlayer.TeamColor) and _G.FriendColor or _G.EnemyColor)
+				esp(v, color)
+			end
+		end
+	end
+end)
+
+-- ESP VISIBILITY REFRESH
+local function updateESPVisibility()
+	for _, v in pairs(Players:GetPlayers()) do
+		local vHolder = Holder:FindFirstChild(v.Name)
+		if vHolder then
+			local box = vHolder:FindFirstChildWhichIsA("BoxHandleAdornment")
+			local tag = vHolder:FindFirstChildWhichIsA("BillboardGui")
+			if box then box.Visible = toggleESP end
+			if tag then tag.Enabled = toggleESP and toggleNameTags end
+		end
+		if v.Character and v.Character:FindFirstChild("GetReal") then
+			v.Character.GetReal.Enabled = toggleESP
+		end
+	end
+end
+
+-- UI BUTTON EVENTS
+toggleESPButton.MouseButton1Click:Connect(function()
+	toggleESP = not toggleESP
+	toggleESPButton.Text = toggleESP and "ESP: ON" or "ESP: OFF"
+	toggleESPButton.BackgroundColor3 = toggleESP and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(80, 0, 0)
+	updateESPVisibility()
+end)
+
+toggleNameButton.MouseButton1Click:Connect(function()
+	toggleNameTags = not toggleNameTags
+	toggleNameButton.Text = toggleNameTags and "NameTags: ON" or "NameTags: OFF"
+	toggleNameButton.BackgroundColor3 = toggleNameTags and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(80, 0, 0)
+	updateESPVisibility()
+end)
+
+-- K KEY TO TOGGLE UI VISIBILITY
+game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.K then
+		screenGui.Enabled = not screenGui.Enabled
+	end
+end)
